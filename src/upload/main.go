@@ -22,6 +22,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// TODO: Make these constants configurable env variables.
 const (
 	S3_REGION = "us-east-1"
 	S3_BUCKET = "fylz-files"
@@ -73,6 +74,10 @@ func Handler(ctx context.Context, rq Request) (Response, error) {
 	//jsonString, _ := json.Marshal(rq.Headers)
 	//log.Println("RequestHeaders: " + string(jsonString))
 	mediaType, params, err := mime.ParseMediaType(rq.Headers["content-type"])
+	if !strings.HasPrefix(mediaType, "multipart/") {
+		log.Println("Level=Error, Action=ParseMediaType, Message=Unsupported media type, MediaType=" + mediaType + ".")
+		return Response{StatusCode: 415}, nil
+	}
 	//jsonString, _ = json.Marshal(params)
 	//log.Println("MultipartHeaderParams:" + string(jsonString))
 	log.Println("Level=Info, Action=ParseMediaType, Message=Parsing media type.")
@@ -82,10 +87,6 @@ func Handler(ctx context.Context, rq Request) (Response, error) {
 		return Response{StatusCode: 500}, nil
 	}
 	log.Println("Level=Info, Action=ParseMediaType, Message=Parsed media type, Value=" + mediaType + ".")
-	if !strings.HasPrefix(mediaType, "multipart/") {
-		log.Println("Level=Error, Action=ParseMediaType, Message=Unsupported media type, MediaType=" + mediaType + ".")
-		return Response{StatusCode: 415}, nil
-	}
 
 	ids := make(map[string]string)
 
@@ -104,11 +105,8 @@ func Handler(ctx context.Context, rq Request) (Response, error) {
 			return Response{StatusCode: 500}, nil
 		}
 		slurp, err := ioutil.ReadAll(p)
+		//futile attempts to make the multipart upload behave properly
 		slurp = bytes.ReplaceAll(slurp, []byte("\xEF\xBF\xBD"), []byte(""))
-		// slurpISO859, err := charmap.ISO8859_1.NewDecoder().Bytes(slurp)
-		// slurpISO859 = bytes.Trim(slurpISO859, "\x00")
-		//slurpUtf8 := toUtf8(slurp)
-		//log.Println("Sizes after conversion. slurpISO859.size=" + strconv.Itoa(len(slurpISO859)) + ".")
 		id := uuid.New().String()
 		filename := p.FileName()
 		if err != nil {
@@ -117,9 +115,6 @@ func Handler(ctx context.Context, rq Request) (Response, error) {
 			return Response{StatusCode: 500}, nil
 		}
 		contentType := p.Header.Get("Content-Type")
-		// fileBytes, _ := b64.StdEncoding.DecodeString(rq.Body)
-		// log.Println(rq.Body)
-		// log.Println("Level=Info, Action=Upload, Message=Uploading file, FileName=" + filename + ", Id=" + id + ", ContentType=" + contentType + ", Len=" + strconv.Itoa(len(slurp)) + ".")
 		err = upload(id+"/"+filename, slurp, contentType)
 		if err != nil {
 			log.Println("Level=Error, Action=Upload, Message=Failed to upload file, FileName=" + filename + ", Id=" + id + ".")

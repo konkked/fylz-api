@@ -7,6 +7,9 @@ provider:
   runtime: go1.x
   stage: prod
   region: us-east-1
+  apiGateway:
+    binaryMediaTypes:
+      - '*/*'
   iamRoleStatements:
     - Effect: "Allow"
       Action: [ "s3:ListBucket", "s3:PutObject", "s3:GetObject", "s3:DeleteObject", ]

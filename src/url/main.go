@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// TODO: Make these constants configurable env variables.
 const (
 	S3_REGION               = "us-east-1"
 	S3_BUCKET               = "fylz-files"
