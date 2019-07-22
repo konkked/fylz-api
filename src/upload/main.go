@@ -92,7 +92,7 @@ func Handler(ctx context.Context, rq Request) (Response, error) {
 
 	log.Println("Level=Info, Action=ReadMultiPartContent, Message=Reading multipart content.")
 
-	cleanMultipartTempFiles()
+	//cleanMultipartTempFiles()
 	mr := multipart.NewReader(strings.NewReader(rq.Body), params["boundary"])
 	for {
 		log.Println("Level=Info, Action=ReadMultiPartContent, Message=Reading multipart content part.")
