@@ -29,12 +29,6 @@ type FileResult struct {
 	Size     int64  `json:"size"`
 }
 
-type ListFilesResult struct {
-	Items                 []FileResult `json:"items"`
-	NextContinuationToken string       `json:"next_continuation_token"`
-	IsTruncated           bool         `json:"is_truncated"`
-}
-
 // Handler is our lambda handler invoked by the `lambda.Start` function call
 func Handler(ctx context.Context, rq Request) (Response, error) {
 	log.Println("Level=Info, Action=CreatingS3Session, Message=Creating session.")
