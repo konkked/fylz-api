@@ -47,27 +47,27 @@ func htmap(s string) map[string]string {
 	return ret
 }
 
-func toUtf8(iso8859_1_buf []byte) []byte {
-	buf := make([]rune, len(iso8859_1_buf))
-	for i, b := range iso8859_1_buf {
-		buf[i] = rune(b)
-	}
-	return []byte(string(buf))
-}
+// func toUtf8(iso8859_1_buf []byte) []byte {
+// 	buf := make([]rune, len(iso8859_1_buf))
+// 	for i, b := range iso8859_1_buf {
+// 		buf[i] = rune(b)
+// 	}
+// 	return []byte(string(buf))
+// }
 
-func cleanMultipartTempFiles() {
-	files, err := filepath.Glob(os.Getenv("TMPDIR") + "*")
-	log.Println("TempFiles: " + strconv.Itoa(len(files)))
-	if err != nil {
-		panic(err)
-	}
-	for _, f := range files {
-		log.Println(f)
-		// if err := os.Remove(f); err != nil {
-		// 	panic(err)
-		// }
-	}
-}
+// func cleanMultipartTempFiles() {
+// 	files, err := filepath.Glob(os.Getenv("TMPDIR") + "*")
+// 	log.Println("TempFiles: " + strconv.Itoa(len(files)))
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	for _, f := range files {
+// 		log.Println(f)
+// 		// if err := os.Remove(f); err != nil {
+// 		// 	panic(err)
+// 		// }
+// 	}
+// }
 
 // Handler is our lambda handler invoked by the `lambda.Start` function call
 func Handler(ctx context.Context, rq Request) (Response, error) {

@@ -41,6 +41,18 @@ functions:
             parameters: 
               paths: 
                 id: true
+  url:
+    handler: bin/url
+    events:
+      - http:
+          path: api/files/url/{id}
+          method: get
+  list:
+    handler: bin/list
+    events:
+      - http:
+          path: api/files
+          method: get
 
 Resources:
   IamRoleLambdaExecution:
