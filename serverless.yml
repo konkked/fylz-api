@@ -45,8 +45,12 @@ functions:
     handler: bin/url
     events:
       - http:
-          path: api/files/url/{id}
+          path: api/files/{action}/url
           method: get
+          request: 
+            parameters: 
+              paths: 
+                action: true
   list:
     handler: bin/list
     events:
