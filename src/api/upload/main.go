@@ -9,7 +9,8 @@ import (
 	"log"
 	"mime"
 	"mime/multipart"
-	//"os"
+	"os"
+
 	//"path/filepath"
 	//"strconv"
 	"strings"
@@ -23,9 +24,9 @@ import (
 )
 
 // TODO: Make these constants configurable env variables.
-const (
-	S3_REGION = "us-east-1"
-	S3_BUCKET = "fylz-files"
+var (
+	S3_REGION = os.Getenv("S3_REGION")
+	S3_BUCKET = os.Getenv("S3_BUCKET")
 )
 
 // Response is of type APIGatewayProxyResponse since we're leveraging the

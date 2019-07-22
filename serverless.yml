@@ -1,11 +1,14 @@
 service: fylz-api
-
 frameworkVersion: '>=1.28.0 <2.0.0'
-
 provider:
   name: aws
   runtime: go1.x
   stage: prod
+  custom:
+    bucketName: fylz-files
+  environment:
+    S3_REGION: us-east-1
+    S3_BUCKET: ${self:provider.custom.bucketName}
   region: us-east-1
   apiGateway:
     binaryMediaTypes:
@@ -13,10 +16,10 @@ provider:
   iamRoleStatements:
     - Effect: "Allow"
       Action: [ "s3:ListBucket", "s3:PutObject", "s3:GetObject", "s3:DeleteObject", ]
-      Resource: "arn:aws:s3:::fylz-files/*"
+      Resource: arn:aws:s3:::${self:provider.custom.bucketName}/*
     - Effect: "Allow"
       Action: [ "s3:ListBucket" ]
-      Resource: "arn:aws:s3:::fylz-files"
+      Resource: arn:aws:s3:::${self:provider.custom.bucketName}
 
 package:
   exclude:
@@ -73,4 +76,4 @@ Resources:
   FileBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: fylz-files
+      BucketName: ${self:provider.custom.bucketName}

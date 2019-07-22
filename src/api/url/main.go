@@ -1,10 +1,16 @@
 package main
 
+/**
+* Creates a signed download and upload url, the upload url payload contains
+* a unique identifier that can be used to retrieve the file at a later time.
+ */
+
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -17,22 +23,71 @@ import (
 	"github.com/google/uuid"
 )
 
-// TODO: Make these constants configurable env variables.
+var (
+	S3_REGION = os.Getenv("S3_REGION")
+	S3_BUCKET = os.Getenv("S3_BUCKET")
+)
+
 const (
-	S3_REGION               = "us-east-1"
-	S3_BUCKET               = "fylz-files"
 	MAX_URL_TTL_MINUTES     = 30
 	MIN_URL_TTL_MINUTES     = 1
 	DEFAULT_URL_TTL_MINUTES = 5
 )
 
-// Response is of type APIGatewayProxyResponse since we're leveraging the
-// AWS Lambda Proxy Request functionality (default behavior)
-//
-// https://serverless.com/framework/docs/providers/aws/events/apigateway/#lambda-proxy-integration
-
 type Response events.APIGatewayProxyResponse
 type Request events.APIGatewayProxyRequest
+
+func createDownloadUrl(svc *s3.S3, id string, ttl int) (string, error) {
+	fileKey, err := findFileKey(svc, id)
+	if err != nil {
+		return "", err
+	}
+
+	req, _ := svc.GetObjectRequest(&s3.GetObjectInput{
+		Bucket: aws.String(S3_BUCKET),
+		Key:    aws.String(fileKey),
+	})
+
+	urlStr, err := req.Presign(time.Minute * time.Duration(ttl))
+	if err != nil {
+		return "", err
+	}
+
+	return urlStr, nil
+}
+
+func findFileKey(svc *s3.S3, id string) (string, error) {
+	log.Println("Level=Info, Action=ListS3Objects, Message=Listing S3 Objects.")
+	params := &s3.ListObjectsV2Input{
+		Bucket: aws.String(S3_BUCKET),
+		Prefix: aws.String(id + "/"),
+	}
+
+	files, err := svc.ListObjectsV2(params)
+
+	if err != nil {
+		log.Fatal(err)
+		return "", err
+	}
+
+	if len(files.Contents) == 0 {
+		return "", nil
+	}
+
+	fileKey := ""
+	for _, s3Item := range files.Contents {
+		if !strings.HasPrefix(*s3Item.Key, id+"/.meta.") {
+			fileKey = *s3Item.Key
+			break
+		}
+	}
+
+	if fileKey == "" {
+		return "", nil
+	}
+
+	return fileKey, nil
+}
 
 func parseUrlTtl(ttlPtr *string) int {
 	ttl := *ttlPtr
@@ -64,7 +119,7 @@ func handleDownloadUrlRq(ctx context.Context, rq Request, svc *s3.S3, ttl int) (
 		return Response{StatusCode: 400}, nil
 	}
 
-	url, err := getSignedFileUrl(svc, id, ttl)
+	url, err := createDownloadUrl(svc, id, ttl)
 	if err != nil {
 		log.Println("Level=Error, Action=GetSignedDownloadUrl, Message=Signed Url fetch failed.")
 		return Response{StatusCode: 500}, err
@@ -113,8 +168,8 @@ func handleUploadUrlRq(ctx context.Context, rq Request, svc *s3.S3, ttl int) (Re
 	log.Println("Level=Info, Action=GenerateUploadUrl, Message=Creating signed url.")
 	log.Printf("Level=Info, Action=GenerateUploadUrl, Parameters.Filename=%s, Parameters.Id=%s.", filename, id)
 	uploadRq, _ := svc.PutObjectRequest(&s3.PutObjectInput{
-		Bucket:  aws.String(S3_BUCKET),
-		Key:     aws.String(key),
+		Bucket: aws.String(S3_BUCKET),
+		Key:    aws.String(key),
 	})
 	url, _, err := uploadRq.PresignRequest(expiry.Sub(time.Now()))
 
@@ -127,7 +182,7 @@ func handleUploadUrlRq(ctx context.Context, rq Request, svc *s3.S3, ttl int) (Re
 	body, _ := json.Marshal(map[string]interface{}{
 		"id":     id,
 		"url":    url,
-		"expiry": expiry
+		"expiry": expiry,
 	})
 
 	if err != nil {
@@ -179,58 +234,6 @@ func Handler(ctx context.Context, rq Request) (Response, error) {
 	}
 
 	return Response{StatusCode: 400}, nil
-}
-
-func getFileKey(svc *s3.S3, id string) (string, error) {
-	log.Println("Level=Info, Action=ListS3Objects, Message=Listing S3 Objects.")
-	params := &s3.ListObjectsV2Input{
-		Bucket: aws.String(S3_BUCKET),
-		Prefix: aws.String(id + "/"),
-	}
-
-	files, err := svc.ListObjectsV2(params)
-
-	if err != nil {
-		log.Fatal(err)
-		return "", err
-	}
-
-	if len(files.Contents) == 0 {
-		return "", nil
-	}
-
-	fileKey := ""
-	for _, s3Item := range files.Contents {
-		if !strings.HasPrefix(*s3Item.Key, id+"/.meta.") {
-			fileKey = *s3Item.Key
-			break
-		}
-	}
-
-	if fileKey == "" {
-		return "", nil
-	}
-
-	return fileKey, nil
-}
-
-func getSignedFileUrl(svc *s3.S3, id string, ttl int) (string, error) {
-	fileKey, err := getFileKey(svc, id)
-	if err != nil {
-		return "", err
-	}
-
-	req, _ := svc.GetObjectRequest(&s3.GetObjectInput{
-		Bucket: aws.String(S3_BUCKET),
-		Key:    aws.String(fileKey),
-	})
-
-	urlStr, err := req.Presign(time.Minute * time.Duration(ttl))
-	if err != nil {
-		return "", err
-	}
-
-	return urlStr, nil
 }
 
 func main() {

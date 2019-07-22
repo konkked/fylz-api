@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -17,9 +18,9 @@ import (
 )
 
 // TODO: Replace with environment variables.
-const (
-	S3_REGION = "us-east-1"
-	S3_BUCKET = "fylz-files"
+var (
+	S3_REGION = os.Getenv("S3_REGION")
+	S3_BUCKET = os.Getenv("S3_BUCKET")
 )
 
 // Response is of type APIGatewayProxyResponse since we're leveraging the
