@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
+// TODO: Replace with environment variables.
 const (
 	S3_REGION = "us-east-1"
 	S3_BUCKET = "fylz-files"

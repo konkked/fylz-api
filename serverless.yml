@@ -26,13 +26,13 @@ package:
 
 functions:
   upload:
-    handler: bin/upload
+    handler: bin/api/upload
     events:
       - http:
           path: api/files
           method: post
   download:
-    handler: bin/download
+    handler: bin/api/download
     events:
       - http:
           path: api/files/{id}
@@ -42,17 +42,17 @@ functions:
               paths: 
                 id: true
   url:
-    handler: bin/url
+    handler: bin/api/url
     events:
       - http:
-          path: api/files/{action}/url
+          path: api/url/{action}
           method: get
           request: 
             parameters: 
               paths: 
                 action: true
   list:
-    handler: bin/list
+    handler: bin/api/list
     events:
       - http:
           path: api/files

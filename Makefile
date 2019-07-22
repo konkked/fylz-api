@@ -3,10 +3,10 @@ GOBUILDFLAGS = -ldflags="-s -w"
 GOBUILD = env GOOS=linux go build
 
 build:
-	$(GOBUILD) $(GOBUILDFLAGS) -o bin/upload src/upload/main.go
-	$(GOBUILD) $(GOBUILDFLAGS) -o bin/download src/download/main.go
-	$(GOBUILD) $(GOBUILDFLAGS) -o bin/url src/url/main.go
-	$(GOBUILD) $(GOBUILDFLAGS) -o bin/list src/list/main.go
+	$(GOBUILD) $(GOBUILDFLAGS) -o bin/api/upload src/api/upload/main.go
+	$(GOBUILD) $(GOBUILDFLAGS) -o bin/api/download src/api/download/main.go
+	$(GOBUILD) $(GOBUILDFLAGS) -o bin/api/url src/api/url/main.go
+	$(GOBUILD) $(GOBUILDFLAGS) -o bin/api/list src/api/list/main.go
 clean:
 	rm -rf ./bin
 

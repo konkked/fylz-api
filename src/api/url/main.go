@@ -58,21 +58,40 @@ func parseUrlTtl(ttlPtr *string) int {
 
 func handleDownloadUrlRq(ctx context.Context, rq Request, svc *s3.S3, ttl int) (Response, error) {
 	id := rq.QueryStringParameters["id"]
+
+	if id == "" {
+		log.Println("Level=Error, Action=GetSignedDownloadUrl, Message=Missing required id parameter.")
+		return Response{StatusCode: 400}, nil
+	}
+
 	url, err := getSignedFileUrl(svc, id, ttl)
 	if err != nil {
-		log.Println("Level=Error, Action=GetSignedUrl, Message=Signed Url fetch failed.")
+		log.Println("Level=Error, Action=GetSignedDownloadUrl, Message=Signed Url fetch failed.")
 		return Response{StatusCode: 500}, err
 	}
 
 	if url == "" {
-		log.Println("Level=Warn, Action=GetSignedUrl, Message=Item not found.")
+		log.Println("Level=Warn, Action=GetSignedDownloadUrl, Message=Item not found.")
 		return Response{StatusCode: 404}, nil
 	}
 
+	expiry := time.Now().Add(time.Minute * time.Duration(ttl))
+	body, _ := json.Marshal(map[string]interface{}{
+		"id":     id,
+		"url":    url,
+		"expiry": expiry,
+	})
+
+	var buf bytes.Buffer
+	json.HTMLEscape(&buf, body)
+
 	resp := Response{
-		StatusCode: 301,
+		StatusCode:      200,
+		IsBase64Encoded: false,
+		Body:            buf.String(),
 		Headers: map[string]string{
-			"Location": url,
+			"Content-Type":    "application/json",
+			"x-flyz-fn-reply": "upload-handler",
 		},
 	}
 
@@ -80,24 +99,24 @@ func handleDownloadUrlRq(ctx context.Context, rq Request, svc *s3.S3, ttl int) (
 }
 
 func handleUploadUrlRq(ctx context.Context, rq Request, svc *s3.S3, ttl int) (Response, error) {
-
 	log.Println("Level=Info, Action=CreatingS3Session, Message=Creating S3 session.")
 	filename := rq.QueryStringParameters["filename"]
 
 	if filename == "" {
-		log.Println("Level=Error, Action=GenerateUploadUrl, Message=Request is missing required filename parameter.")
+		log.Println("Level=Error, Action=GenerateUploadUrl, Message=Request is missing required parameter, Parameter=filename.")
 		return Response{StatusCode: 500}, nil
 	}
 
 	id := uuid.New().String()
 	key := id + "/" + filename
 	expiry := time.Now().Add(time.Minute * time.Duration(ttl))
+	log.Println("Level=Info, Action=GenerateUploadUrl, Message=Creating signed url.")
+	log.Printf("Level=Info, Action=GenerateUploadUrl, Parameters.Filename=%s, Parameters.Id=%s.", filename, id)
 	uploadRq, _ := svc.PutObjectRequest(&s3.PutObjectInput{
 		Bucket:  aws.String(S3_BUCKET),
 		Key:     aws.String(key),
-		Expires: aws.Time(expiry),
 	})
-	url, err := uploadRq.Presign(expiry.Sub(time.Now()))
+	url, _, err := uploadRq.PresignRequest(expiry.Sub(time.Now()))
 
 	if err != nil {
 		log.Println("Level=Error, Action=GenerateUploadUrl, Message=Signing url failed.")
@@ -108,7 +127,7 @@ func handleUploadUrlRq(ctx context.Context, rq Request, svc *s3.S3, ttl int) (Re
 	body, _ := json.Marshal(map[string]interface{}{
 		"id":     id,
 		"url":    url,
-		"expiry": expiry,
+		"expiry": expiry
 	})
 
 	if err != nil {
@@ -138,6 +157,7 @@ func Handler(ctx context.Context, rq Request) (Response, error) {
 	ttl := rq.QueryStringParameters["ttl"]
 	ttlInt := parseUrlTtl(&ttl)
 
+	log.Println("Level=Info, Action=HandleRequest, Message=Request Start, Parameter.Action=" + action + ".")
 	log.Println("Level=Info, Action=CreatingS3Session, Message=Creating session.")
 	// Create a single AWS session (we can re use this if we're uploading many files)
 	s, err := session.NewSession(&aws.Config{Region: aws.String(S3_REGION)})
