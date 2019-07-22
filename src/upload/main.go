@@ -9,9 +9,9 @@ import (
 	"log"
 	"mime"
 	"mime/multipart"
-	"os"
-	"path/filepath"
-	"strconv"
+	//"os"
+	//"path/filepath"
+	//"strconv"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
