@@ -3,17 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
-	"io"
-	"io/ioutil"
 	"log"
-	"mime"
-	"mime/multipart"
 	"os"
-
-	//"path/filepath"
-	//"strconv"
-	"strings"
+	"strconv"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -36,126 +30,70 @@ var (
 type Response events.APIGatewayProxyResponse
 type Request events.APIGatewayProxyRequest
 
-func htmap(s string) map[string]string {
-	ret := make(map[string]string)
-	kvps := strings.Split(s, ";")
-	for _, kvp := range kvps {
-		spl := strings.Split(kvp, "=")
-		if len(spl) > 1 {
-			ret[strings.Trim(spl[0], " ")] = strings.Trim(spl[1], "\" ")
-		}
-	}
-	return ret
-}
-
-// func toUtf8(iso8859_1_buf []byte) []byte {
-// 	buf := make([]rune, len(iso8859_1_buf))
-// 	for i, b := range iso8859_1_buf {
-// 		buf[i] = rune(b)
-// 	}
-// 	return []byte(string(buf))
-// }
-
-// func cleanMultipartTempFiles() {
-// 	files, err := filepath.Glob(os.Getenv("TMPDIR") + "*")
-// 	log.Println("TempFiles: " + strconv.Itoa(len(files)))
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	for _, f := range files {
-// 		log.Println(f)
-// 		// if err := os.Remove(f); err != nil {
-// 		// 	panic(err)
-// 		// }
-// 	}
-// }
-
 // Handler is our lambda handler invoked by the `lambda.Start` function call
 func Handler(ctx context.Context, rq Request) (Response, error) {
 	//jsonString, _ := json.Marshal(rq.Headers)
 	//log.Println("RequestHeaders: " + string(jsonString))
-	mediaType, params, err := mime.ParseMediaType(rq.Headers["content-type"])
-	if !strings.HasPrefix(mediaType, "multipart/") {
-		log.Println("Level=Error, Action=ParseMediaType, Message=Unsupported media type, MediaType=" + mediaType + ".")
-		return Response{StatusCode: 415}, nil
+	var fileContent []byte
+	if rq.IsBase64Encoded {
+		fileContent, _ = base64.StdEncoding.DecodeString(rq.Body)
+		// if err != nil {
+		// 	log.Fatal(err)
+		// 	log.Println("Level=Error, Action=DecodeBase64Body, Message=Failed to decode base64 string.")
+		// 	return Response{StatusCode: 500}, nil
+		// }
+	} else {
+		fileContent = []byte(rq.Body)
 	}
-	//jsonString, _ = json.Marshal(params)
-	//log.Println("MultipartHeaderParams:" + string(jsonString))
-	log.Println("Level=Info, Action=ParseMediaType, Message=Parsing media type.")
-	if err != nil {
-		log.Println("Level=Error, Action=ParseMediaType, Message=Parsing media type failed.")
-		log.Fatal(err)
+
+	id := uuid.New().String()
+	filename := rq.PathParameters["filename"]
+
+	if filename == "" {
+		log.Println("Level=Error, Action=ParsingParameters, Message=Request missing required parameter filename.")
 		return Response{StatusCode: 500}, nil
 	}
-	log.Println("Level=Info, Action=ParseMediaType, Message=Parsed media type, Value=" + mediaType + ".")
 
-	ids := make(map[string]string)
+	s, err := session.NewSession(&aws.Config{Region: aws.String(S3_REGION)})
 
-	log.Println("Level=Info, Action=ReadMultiPartContent, Message=Reading multipart content.")
-
-	//cleanMultipartTempFiles()
-	mr := multipart.NewReader(strings.NewReader(rq.Body), params["boundary"])
-	for {
-		log.Println("Level=Info, Action=ReadMultiPartContent, Message=Reading multipart content part.")
-		p, err := mr.NextPart()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Fatal(err)
-			return Response{StatusCode: 500}, nil
-		}
-		slurp, err := ioutil.ReadAll(p)
-		//futile attempts to make the multipart upload behave properly
-		slurp = bytes.ReplaceAll(slurp, []byte("\xEF\xBF\xBD"), []byte(""))
-		id := uuid.New().String()
-		filename := p.FileName()
-		if err != nil {
-			log.Println("Level=Error, Action=Upload, Message=Failed to encode bytes, FileName=" + filename + ", Id=" + id + ".")
-			log.Fatal(err)
-			return Response{StatusCode: 500}, nil
-		}
-		contentType := p.Header.Get("Content-Type")
-		err = upload(id+"/"+filename, slurp, contentType)
-		if err != nil {
-			log.Println("Level=Error, Action=Upload, Message=Failed to upload file, FileName=" + filename + ", Id=" + id + ".")
-			log.Fatal(err)
-			return Response{StatusCode: 500}, nil
-		}
-		ids[filename] = id
+	if err != nil {
+		log.Fatal(err)
+		log.Println("Level=Error, Action=CreatingS3Session, Message=Failed to create S3 Session.")
+		return Response{StatusCode: 500}, nil
 	}
-	// log.Println(rq.Body)
-	// mr := multipart.NewReader(strings.NewReader(rq.Body), params["boundary"])
-	// for {
-	// 	p, err := mr.NextPart()
-	// 	if err == io.EOF {
-	// 		break
-	// 	}
-	// 	if err != nil {
-	// 		log.Fatal(err)
-	// 	}
-	// 	slurp, err := ioutil.ReadAll(p)
-	// 	if err != nil {
-	// 		log.Fatal(err)
-	// 	}
-	// 	log.Printf("Part %q: %q\n", p.Header.Get("Foo"), slurp)
-	// }
 
-	// if filename == "" {
-	// 	log.Println("Level=Error, Action=ReadFileName,  Message=Filename was not provided.")
-	// 	return Response{StatusCode: 500}, nil
-	// }
+	var contentLength int64
+	contentLenStr := rq.Headers["content-length"]
+	if contentLenStr == "" {
+		contentLength = int64(len(fileContent))
+	} else {
+		contentLengthInt, err := strconv.Atoi(contentLenStr)
+		if err != nil {
+			log.Println("Level=Warn, Action=ParsingContentLength, Message=Failed to parse content-length header.")
+			contentLength = int64(len(fileContent))
+		}
+		contentLength = int64(contentLengthInt)
+	}
 
-	// id := uuid.New().String()
-	// err := upload(id+"/"+filename, fileBytes)
-	// if err != nil {
-	// 	log.Println("Level=Error, Action=UploadFile, Message=Uploading file failed.")
-	// 	log.Fatal(err)
-	// 	return Response{StatusCode: 500}, nil
-	// }
+	contentType := rq.Headers["content-type"]
+
+	log.Println("Level=Info, Action=UploadingFile, Message=Uploading File, ContentType=" + contentType + ".")
+	_, err = s3.New(s).PutObject(&s3.PutObjectInput{
+		Bucket:        aws.String(S3_BUCKET),
+		Key:           aws.String(id + "/" + filename),
+		Body:          bytes.NewReader(fileContent),
+		ContentType:   aws.String(contentType),
+		ContentLength: aws.Int64(contentLength),
+	})
+
+	if err != nil {
+		log.Fatal(err)
+		log.Println("Level=Error, Action=CreatingS3Session, Message=Failed to create S3 Session.")
+		return Response{StatusCode: 500}, nil
+	}
 
 	body, err := json.Marshal(map[string]interface{}{
-		"ids": ids,
+		"id": id,
 	})
 
 	if err != nil {
@@ -176,54 +114,7 @@ func Handler(ctx context.Context, rq Request) (Response, error) {
 			"x-flyz-fn-reply": "upload-handler",
 		},
 	}
-
 	return resp, nil
-}
-
-func upload(filename string, content []byte, contentType string) error {
-
-	// Create a single AWS session (we can re use this if we're uploading many files)
-	s, err := session.NewSession(&aws.Config{Region: aws.String(S3_REGION)})
-	if err != nil {
-		return err
-	}
-
-	// Upload
-	err = uploadToS3(s, filename, content, contentType)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// AddFileToS3 will upload a single file to S3, it will require a pre-built aws session
-// and will set file info like content type and encryption on the uploaded file.
-func uploadToS3(s *session.Session, filename string, content []byte, contentType string) error {
-
-	// Open the file for use
-	// file, err := os.Open(fileDir)
-	// if err != nil {
-	//     return err
-	// }
-	// defer file.Close()
-
-	// Get file size and read the file content into a buffer
-	// fileInfo, _ := file.Stat()
-	// var size int64 = fileInfo.Size()
-	// buffer := make([]byte, size)
-	// file.Read(buffer)
-
-	// Config settings: this is where you choose the bucket, filename, content-type etc.
-	// of the file you're uploading.
-	_, err := s3.New(s).PutObject(&s3.PutObjectInput{
-		Bucket:        aws.String(S3_BUCKET),
-		Key:           aws.String(filename),
-		Body:          bytes.NewReader(content),
-		ContentType:   aws.String(contentType),
-		ContentLength: aws.Int64(int64(len(content))),
-	})
-	return err
 }
 
 func main() {

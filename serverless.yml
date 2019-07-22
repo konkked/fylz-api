@@ -32,8 +32,12 @@ functions:
     handler: bin/api/upload
     events:
       - http:
-          path: api/files
-          method: post
+          path: api/files/upload/{filename}
+          method: put
+          request: 
+            parameters:
+              paths: 
+                filename: true
   download:
     handler: bin/api/download
     events:
