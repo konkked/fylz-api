@@ -6,6 +6,13 @@
 
 I implemented the list files endpoint `GET api/files?[all=true]&[continuation_token]`, by default the endpoint will paginate the response and provide a continuation token, an additional query parameter can be provided to return all items (or the remaining items if a continuation token is provided).
 
+### Bonus Endpoint
+
+I also implemented an api that will provide the client with a signed url that can be used to fetch or upload a file directly from S3. This is useful for very large file uploads and would also cost/infastructure pressure as we'd offload long running non-cpu intensive IO work off of our lambda instances and onto AWS.
+
+Endpoint to get a signed download url `GET api/url/download?id=<id>`
+Endpoint to get a signed upload url `GET api/url/upload?filename=<filename>`
+
 ### Architectural Decisions
 
 **Programming Language** - I decided to implement this api in golang, I figured it would be a good dry run to see if I can quickly pick up the language and build something you guys are working in, and it is a great programming language (serisouly had a lot of fun programming in it).
@@ -22,11 +29,11 @@ I implemented the list files endpoint `GET api/files?[all=true]&[continuation_to
 
 ### Application Design
 
-**UniqueId** - Chose a guid since it was light weight and easily available in most language's standard libraries.
+**UniqueId** - Chose a guid since generating them is light weight and are a widely known concept amoung developers.
 
 **Assocating the File** - Decided to save the file to S3 with the uuid as a key prefix seperated by path delimiter `<id>/<filename>`, all operations would end up becoming extremly simple in this case. It would also be easy to extend this to a secure application by adding the username as the first prefix and performing searches only against those prefixes.
 
-**Multipart Upload** - So right now the direct upload isn't working, it works for ASCII files but that is about it I am pretty sure I can get this to work, I am just doing it because I want to figure it out...if it wasn't the weekend I would have definitely reached out and asked if it would be OK to use the signed-url to do the upload and download since I think that is actually the better solution.
+**Gave up on Multi-Part Upload** - I initially wanted to use a multipart upload to allow multiple files to be uploaded at once,aws api gw doesn't seem to play very nice with multipart form data though, after modifying the api to accept a 
 
 **Use of Signed URLs** - I initially did this as a workaround but after doing some more research I think this route makes a lot of sense, you save compute money since you aren't executing the IO over a lambda and you are no longer limited to the lambda max request size.
 
@@ -38,15 +45,17 @@ See documentation below, the major dependencies that I don't think will be progr
 
 This API is currently deployed on my AWS account.
 
-#### Direct Upload - POST api/files
+#### Direct Upload - POST api/files/upload/{filename}
 
-Directly uploads a file to s3 via the upload lambda function, I was using a multipart upload to allow for multiple files to be uploaded at once but ran into some encoding issues...after some research I found out that download and uploading directly from a lambda isn't exactly ideal, but still want to figure out what is wrong with it...
+~Directly uploads a file to s3 via the upload lambda function, I was using a multipart upload to allow for multiple files to be uploaded at once but ran into some encoding issues...after some research I found out that download and uploading directly from a lambda isn't exactly ideal, but still want to figure out what is wrong with it...
 
-Currently works with ASCII files, UTF8 files seem to get BOMs littered all over the file after it gets base64 encoded by api gateway.
+Currently works with ASCII files, UTF8 files seem to get BOMs littered all over the file after it gets base64 encoded by api gateway.~
 
 ```http
-POST - https://llaqv4rff3.execute-api.us-east-1.amazonaws.com/prod/api/files
-Content-Type:multipart/form
+POST - https://llaqv4rff3.execute-api.us-east-1.amazonaws.com/prod/api/files/upload/{filename}
+Content-Type:*
+VERB PUT
+
 ```
 
 #### Direct Download - GET api/files/{id}?redirect={?redirect}
@@ -69,13 +78,14 @@ Gets a signed url that can be used to upload or download a file, response object
 PATH: https://llaqv4rff3.execute-api.us-east-1.amazonaws.com/prod/api/url/{action}
 VERB: GET
 CONTENT-TYPE: application/json
-PARAMS: 
+PARAMS:
     action = upload|download
     id (required for download) = unique id of the file.
     filename (required for upload) = filename of the file to be uploaded.
 ```
 
 Response Example
+
 ```javascript
 {
     "expiry": "2019-07-22T04:49:06.704134647Z",
