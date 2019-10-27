@@ -31,25 +31,34 @@ Endpoint to get a signed upload url `GET api/url/upload?filename=<filename>`
 
 **UniqueId** - Chose a guid since generating them is light weight and are a widely known concept amoung developers.
 
-**Assocating the File** - Decided to save the file to S3 with the uuid as a key prefix seperated by path delimiter `<id>/<filename>`, all operations would end up becoming extremly simple in this case. It would also be easy to extend this to a secure application by adding the username as the first prefix and performing searches only against those prefixes.
+**Associating the File with the UUID** - Decided to save the file to S3 with the uuid as a key prefix seperated by path delimiter `<id>/<filename>`, all operations would end up becoming extremly simple in this case. It would also be easy to extend this to a secure application by adding the username as the first prefix and performing searches only against those prefixes.
 
-**Gave up on Multi-Part Upload** - I initially wanted to use a multipart upload to allow multiple files to be uploaded at once,aws api gw doesn't seem to play very nice with multipart form data though, after modifying the api to accept a 
+**First attempt at upload was using Multi-Part Upload** - I initially wanted to use a multipart upload to allow multiple files to be uploaded at once, AWS Api Gateway doesn't seem to play very nice with multipart form data though. I eventually gave up and implemented a single file upload endpoint as originally requested in the specs.
 
-**Use of Signed URLs** - I initially did this as a workaround but after doing some more research I think this route makes a lot of sense, you save compute money since you aren't executing the IO over a lambda and you are no longer limited to the lambda max request size.
+**Use of Signed URLs** - I initially did this as a workaround to issues I was having implementing the upload but after doing some more research I think this functionality makes a lot of sense, you save cost on compute since you aren't executing the IO over a lambda and you are no longer limited to the lambda max request size.
 
 ### Build+Deploy Instructions
 
-See documentation below, the major dependencies that I don't think will be programmatically resolved would be npm, go, aws-cli, serverless. Docker is required to run functions locally.
+See documentation below, the major dependencies that I don't think will be programmatically resolved would be npm, go, aws-cli, serverless. Docker is required to run functions locally. This is one of my first non-toy/non-trivial golang projets so possible I missed some steps in the setup.
 
 ### Deployed Endpoints
 
-This API is currently deployed on my AWS account.
+This API is currently deployed on my AWS account:
+
+endpoints:
+  PUT - https://llaqv4rff3.execute-api.us-east-1.amazonaws.com/prod/api/files/upload/{filename}
+  GET - https://llaqv4rff3.execute-api.us-east-1.amazonaws.com/prod/api/files/{id}
+  GET - https://llaqv4rff3.execute-api.us-east-1.amazonaws.com/prod/api/url/{action}
+  GET - https://llaqv4rff3.execute-api.us-east-1.amazonaws.com/prod/api/files
+functions:
+  upload: fylz-api-prod-upload
+  download: fylz-api-prod-download
+  url: fylz-api-prod-url
+  list: fylz-api-prod-list
 
 #### Direct Upload - POST api/files/upload/{filename}
 
-~Directly uploads a file to s3 via the upload lambda function, I was using a multipart upload to allow for multiple files to be uploaded at once but ran into some encoding issues...after some research I found out that download and uploading directly from a lambda isn't exactly ideal, but still want to figure out what is wrong with it...
-
-Currently works with ASCII files, UTF8 files seem to get BOMs littered all over the file after it gets base64 encoded by api gateway.~
+Uploads a file and provides a unique identifier that can be used to fetch it via the download endpoint.
 
 ```http
 POST - https://llaqv4rff3.execute-api.us-east-1.amazonaws.com/prod/api/files/upload/{filename}
@@ -60,7 +69,7 @@ VERB PUT
 
 #### Direct Download - GET api/files/{id}?redirect={?redirect}
 
-Download a file from s3 preserving the original filename.
+Download a file associated with the unique identifier preserving the original filename.
 
 ```http
 PATH: https://llaqv4rff3.execute-api.us-east-1.amazonaws.com/prod/api/files/{id}
@@ -116,7 +125,7 @@ Fylz is a simple file sharing api built for a world without borders, have you ev
 
 ## Getting Started
 
-If you are a brave soul looking to contribute to this project the setup is fairly straight forward. You'll need to have the following dev depdencnies installed
+If you are a brave soul looking to contribute to this project the setup is fairly straight forward. You'll need to have the following dev dependencies are installed
 
 - golang v1.12+
 - [npm](https://docs.npmjs.com/getting-started/)
